@@ -1,0 +1,117 @@
+# 需安装: fastapi uvicorn requests python-multipart pillow numpy opencv-python
+from fastapi import FastAPI, File, UploadFile, Form, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+import requests
+from PIL import Image
+import io
+import os
+import uuid
+
+app = FastAPI(title="AI E-commerce Design Agent API")
+
+# 跨域配置 (允许前端访问)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], # 落地时请改为你的前端域名
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# ---------------------------------------------------------
+# 配置区 (你作为站长持有的 Key，对用户不可见)
+# ---------------------------------------------------------
+# 这里模拟调用 Nanobanana API，实际请替换为真实接口
+INTERNAL_NANOBANANA_KEY = "sk-xxxxxxxxxxxxxxxxxxxxxxxx" 
+NB_API_ENDPOINT = "https://api.nanobanana.com/v2/generate" # 示例路径
+
+# 用于抠图的开源 API (示例，实际建议本地部署 RMBG-1.4)
+REM_BG_API_ENDPOINT = "https://api.remove.bg/v1.0/removebg" 
+INTERNAL_REMBG_KEY = "xxxxxxxxxxxxxxxxxx"
+
+# 临时文件存储 (示例)
+UPLOAD_FOLDER = "temp_assets"
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+# ---------------------------------------------------------
+# Agent 核心逻辑
+# ---------------------------------------------------------
+
+class TextToImageRequest(BaseModel):
+    prompt: str
+    aspect_ratio: str = "3:4"
+
+@app.post("/api/v1/agent/text-to-image")
+async def agent_text_to_image(request: TextToImageRequest):
+    """逻辑：直接调用 Nanobanana 生成电商场景图"""
+    payload = {
+        "model": "nano-banana-2",
+        "prompt": f"Luxury e-commerce photography, {request.prompt}, high-end lighting, Behance style",
+        "aspect_ratio": request.aspect_ratio,
+        "is_agentic": True # 告诉后端启用 Agent 优化
+    }
+    headers = {"Authorization": f"Bearer {INTERNAL_NANOBANANA_KEY}"}
+    
+    # 模拟请求
+    # response = requests.post(NB_API_ENDPOINT, json=payload, headers=headers)
+    # result_url = response.json().get("data", {}).get("image_url")
+    result_url = "https://images.unsplash.com/photo-1594035910387-fea47794261f" # 模拟返回
+    return {"status": "success", "image_url": result_url, "task_type": "text2img"}
+
+@app.post("/api/v1/agent/product-master")
+async def agent_product_master(
+    file: UploadFile = File(...),
+    prompt: str = Form("Minimalist studio background"),
+    mode: str = Form("generate_scene") # modes: generate_scene, rembg, outpaint
+):
+    """核心智能体端口：处理抠图、扩图、图生图场景"""
+    
+    task_id = str(uuid.uuid4())
+    input_path = os.path.join(UPLOAD_FOLDER, f"{task_id}_input.png")
+    
+    # 保存上传图片
+    with open(input_path, "wb") as f:
+        f.write(await file.read())
+
+    # Agent 根据模式执行不同的工具流
+    
+    if mode == "rembg":
+        """工具流 1: 自动抠图 (使用开源或 API)"""
+        print(f"Agent [{task_id}]: 正在执行抠图...")
+        # 实际代码中调用 rembg 库或 API
+        # res = requests.post(REM_BG_API_ENDPOINT, files={'image_file': open(input_path, 'rb')}, headers={'X-Api-Key': INTERNAL_REMBG_KEY})
+        # with open(output_path, 'wb') as f: f.write(res.content)
+        result_url = "https://cdn-icons-png.flaticon.com/512/3593/3593302.png" # 模拟抠图结果
+        return {"status": "success", "task_id": task_id, "output_url": result_url, "type": "rembg"}
+
+    elif mode == "generate_scene":
+        """工具流 2: 精准控图图生图 (产品重绘场景)"""
+        print(f"Agent [{task_id}]: 正在执行图生图...")
+        # 调用 Nanobanana 2 的 Image-to-Image 接口，带 ControlNet 约束
+        payload = {
+            "model": "nano-banana-2",
+            "init_image_path": f"user_uploads/{task_id}_input.png", # 假设你上传到了他们的 CDN
+            "prompt": f"Professional e-commerce photography of the product, {prompt}, soft lighting, minimalist, 8k",
+            "control_type": "canny", # 精准控图
+            "denoising_strength": 0.5
+        }
+        # response = requests.post(NB_API_ENDPOINT, json=payload, headers={"Authorization": f"Bearer {INTERNAL_NANOBANANA_KEY}"})
+        result_url = "https://images.unsplash.com/photo-1578474846511-04ba529f0b88" # 模拟生成结果
+        return {"status": "success", "task_id": task_id, "output_url": result_url, "type": "img2img"}
+
+    elif mode == "outpaint":
+        """工具流 3: 扩图 (Outpainting)"""
+        print(f"Agent [{task_id}]: 正在执行扩图...")
+        # 这通常需要 SD 模型的扩图功能
+        payload = {
+            "prompt": f"seamlessly extended background, {prompt}",
+            "init_image": "...",
+            "mask_mode": "inpaint_outpaint"
+        }
+        result_url = "https://images.unsplash.com/photo-1523275335684-37898b6baf30" # 模拟扩图结果
+        return {"status": "success", "task_id": task_id, "output_url": result_url, "type": "outpaint"}
+
+    raise HTTPException(status_code=400, detail="Invalid Agent Mode")
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8000)
