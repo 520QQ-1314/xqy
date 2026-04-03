@@ -1,0 +1,48 @@
+# backend/main.py
+import os
+from fastapi import FastAPI, UploadFile, File, Form
+from fastapi.middleware.cors import CORSMiddleware
+import requests
+from rembg import remove  # 开源抠图库
+from PIL import Image
+import io
+
+app = FastAPI()
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+# 站长持有的私密 Key，不暴露给前端
+NANOBANANA_API_KEY = "your_private_token_here"
+
+@app.post("/api/workflow")
+async def handle_agent_workflow(
+    mode: str = Form(...), # 'text2img', 'img2img', 'rembg', 'outpaint'
+    prompt: str = Form(None),
+    image: UploadFile = File(None)
+):
+    # --- 场景 1: 全自动抠图 (完全开源实现) ---
+    if mode == "rembg" and image:
+        input_data = await image.read()
+        output_data = remove(input_data)
+        # 返回处理后的图片（实际建议存入 OSS 并返回 URL）
+        return {"status": "success", "url": "data:image/png;base64,..."}
+
+    # --- 场景 2: 控图/生图 (调用 Nanobanana 2) ---
+    if mode in ["text2img", "img2img"]:
+        # 构造 Agent 提示词，增强 Behance 高端感
+        enhanced_prompt = f"High-end e-commerce photography, {prompt}, minimalist background, studio lighting, 8k resolution"
+        
+        payload = {
+            "model": "nano-banana-2",
+            "prompt": enhanced_prompt,
+            "action": mode
+        }
+        
+        headers = {"Authorization": f"Bearer {NANOBANANA_API_KEY}"}
+        # response = requests.post("https://api.nanobanana.com/v2/gen", json=payload, headers=headers)
+        # return response.json()
+        return {"status": "success", "url": "https://simulated-result.com/img.jpg"}
+
+    # --- 场景 3: 扩图 (Outpainting) ---
+    if mode == "outpaint":
+        # 逻辑：利用 Nanobanana 的 Edit 接口或开源 SD 修复模型
+        return {"status": "success", "url": "扩展后的图片URL"}
