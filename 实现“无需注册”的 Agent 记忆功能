@@ -1,0 +1,4 @@
+const myProjects = [
+  { id: 'job_001', status: 'completed', result_url: '...', timestamp: 1712123456 }
+];
+localStorage.setItem('my_ai_designs', JSON.stringify(myProjects));
