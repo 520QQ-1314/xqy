@@ -1,0 +1,75 @@
+import requests
+import io
+from PIL import Image, ImageDraw, ImageFont
+
+# ---------------------------------------------------------
+# 配置区
+# ---------------------------------------------------------
+NANO_BANANA_API_KEY = "your_free_api_key"
+API_URL = "https://api.nanobanana.com/v2/generate" # 示例接口
+
+class DetailPageAgent:
+    def __init__(self):
+        self.width = 800  # 电商标准宽度
+        self.assets = []  # 存储生成好的子模块图
+
+    def call_nano_banana(self, prompt, input_image_url=None):
+        """调用 Nano Banana 2 接口生成高质图像"""
+        payload = {
+            "model": "nano-banana-2",
+            "prompt": f"Professional e-commerce photography, {prompt}, high-end lighting, 8k",
+            "negative_prompt": "blurry, low quality, distorted",
+            "aspect_ratio": "3:4"
+        }
+        # 如果有输入图，则执行 Image-to-Image (重绘场景)
+        if input_image_url:
+            payload["init_image"] = input_image_url
+            payload["denoising_strength"] = 0.55 
+
+        # 模拟请求 (实际使用时请替换为真实的 requests 逻辑)
+        print(f"Agent: 正在为您生成模块 -> {prompt}")
+        response = requests.post(API_URL, json=payload, headers={"Authorization": f"Bearer {NANO_BANANA_API_KEY}"})
+        # 假设返回的是图片 URL
+        return response.json().get("image_url")
+
+    def create_text_block(self, title, subtitle):
+        """利用 PIL 生成高端排版文字块"""
+        block_height = 400
+        img = Image.new('RGB', (self.width, block_height), color=(255, 255, 255))
+        draw = ImageFont.truetype("Arial.ttf", 40) # 建议换成更高级的衬线体
+        # 简单的居中排版逻辑
+        canvas = ImageDraw.Draw(img)
+        canvas.text((50, 150), title.upper(), fill=(0, 0, 0))
+        canvas.text((50, 220), subtitle, fill=(150, 150, 150))
+        return img
+
+    def build_long_page(self, product_image_url):
+        """Agent 执行流：自动化构建长图"""
+        
+        # 第一步：生成首图氛围大片
+        hero_url = self.call_nano_banana("Minimalist studio background with soft shadows", product_image_url)
+        # 第二步：生成场景应用图
+        scene_url = self.call_nano_banana("Used in a luxury modern living room setting")
+        # 第三步：生成细节展示图
+        detail_url = self.call_nano_banana("Macro shot of product texture and craftsmanship")
+
+        # 模拟下载图片并存入 self.assets
+        # self.assets.append(download_image(hero_url))
+        # self.assets.append(self.create_text_block("Craftsmanship", "The pursuit of perfection in every detail."))
+        # ... 更多模块
+
+        # 第四步：垂直拼接长图
+        total_height = sum(img.height for img in self.assets)
+        combined_img = Image.new('RGB', (self.width, total_height))
+        
+        y_offset = 0
+        for img in self.assets:
+            combined_img.paste(img, (0, y_offset))
+            y_offset += img.height
+
+        combined_img.save("final_detail_page.webp", "WEBP", quality=90)
+        print("Success: 高端详情页长图已生成！")
+
+# 实例化并运行
+# agent = DetailPageAgent()
+# agent.build_long_page("https://your-raw-product-image.jpg")
