@@ -1,0 +1,192 @@
+import React, { useState } from 'react';
+
+const API_BASE_URL = "http://localhost:8000"; // 部署时改为你的后端 API 域名
+
+const AgentCanvas = () => {
+  const [activeTab, setActiveTab] = useState<'text' | 'image'>('text');
+  const [prompt, setPrompt] = useState('');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [resultImage, setResultImage] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [editMode, setEditMode] = useState<'generate_scene' | 'rembg' | 'outpaint'>('generate_scene');
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setSelectedFile(file);
+      setPreviewUrl(URL.createObjectURL(file));
+      setResultImage(null); // 清除上次结果
+    }
+  };
+
+  const handleGenerate = async () => {
+    setIsLoading(true);
+    setResultImage(null);
+    try {
+      if (activeTab === 'text') {
+        const response = await fetch(`${API_BASE_URL}/api/v1/agent/text-to-image`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt }),
+        });
+        const data = await response.json();
+        setResultImage(data.image_url);
+      } else if (activeTab === 'image' && selectedFile) {
+        const formData = new FormData();
+        formData.append('file', selectedFile);
+        formData.append('prompt', prompt || "high end studio background");
+        formData.append('mode', editMode);
+
+        const response = await fetch(`${API_BASE_URL}/api/v1/agent/product-master`, {
+          method: 'POST',
+          body: formData, // FormData 会自动设置 Content-Type
+        });
+        const data = await response.json();
+        setResultImage(data.output_url);
+      }
+    } catch (error) {
+      console.error("Agent Execution Failed:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div className="max-w-[1600px] mx-auto p-6 md:p-10 space-y-10 bg-white min-h-screen">
+      
+      {/* 整合功能选项卡 */}
+      <div className="border-b border-gray-100 pb-4 flex items-center justify-between">
+        <div className="flex space-x-8">
+          {(['text', 'image'] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`pb-3 text-sm font-medium tracking-widest uppercase transition-colors ${activeTab === tab ? 'border-b-2 border-black text-black' : 'text-gray-400 hover:text-black'}`}
+            >
+              {tab === 'text' ? '1. 文字生成电商图' : '2. 上传产品图生成/编辑'}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center space-x-2">
+            <span className="relative flex h-3 w-3">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-500"></span>
+            </span>
+            <span className="text-xs text-blue-600 font-mono">Agent Status: Ready</span>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-[1fr,320px] gap-10">
+        
+        {/* 左侧：画板与结果 (Behance 沉浸式设计) */}
+        <div className="relative group min-h-[500px] bg-gray-50 rounded-3xl overflow-hidden flex items-center justify-center p-4 border border-gray-100 hover:border-gray-200 transition-colors">
+          {isLoading && (
+            <div className="absolute inset-0 bg-white/90 backdrop-blur-sm z-10 flex flex-col items-center justify-center">
+              <div className="w-12 h-12 border-4 border-black border-t-transparent rounded-full animate-spin mb-6"></div>
+              <p className="text-sm tracking-widest text-black uppercase font-medium">Agent 正在执行自动化工作流...</p>
+              <p className="text-xs text-gray-400 mt-2">预计 10-20 秒，无需 API Key</p>
+            </div>
+          )}
+
+          {resultImage ? (
+            <img src={resultImage} alt="AI Agent Result" className="max-w-full max-h-[80vh] object-contain shadow-2xl rounded-lg animate-fade-in" />
+          ) : activeTab === 'image' && previewUrl ? (
+             <div className="relative">
+                <img src={previewUrl} alt="Upload preview" className="max-w-full max-h-[70vh] object-contain opacity-50" />
+                <div className="absolute inset-0 flex items-center justify-center text-gray-500 font-light italic">等待 AI 处理...</div>
+             </div>
+          ) : (
+            <div className="text-center space-y-4 p-20">
+              <div className="text-9xl text-gray-100">✦</div>
+              <h3 className="text-xl font-medium text-gray-900">Agent Studio</h3>
+              <p className="text-gray-400 font-light max-w-sm">在右侧输入描述或上传原图，让智能体为您完成繁琐的设计工作。</p>
+            </div>
+          )}
+        </div>
+
+        {/* 右侧：控制面板 */}
+        <div className="space-y-8 bg-white p-8 border border-gray-100 rounded-3xl shadow-sm">
+          
+          {/* 输入 Prompt */}
+          <div className="space-y-3">
+            <label className="text-xs font-bold tracking-widest text-gray-400 uppercase">创作描述 (Prompt)</label>
+            <textarea
+              rows={5}
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              placeholder={activeTab === 'text' ? "输入香水、北欧风、柔光..." : "描述产品所在的场景，例如：放置在极简大理石台面上..."}
+              className="w-full p-4 border border-gray-100 rounded-2xl bg-gray-50 text-sm focus:ring-1 focus:ring-black transition"
+            />
+          </div>
+
+          {/* 图生图专属选项 */}
+          {activeTab === 'image' && (
+            <div className="space-y-5 border-t border-gray-100 pt-6">
+              <label className="text-xs font-bold tracking-widest text-gray-400 uppercase">上传产品原图</label>
+              <label className="block w-full h-32 border-2 border-dashed border-gray-200 rounded-2xl hover:border-blue-400 hover:bg-blue-50 transition-colors cursor-pointer flex items-center justify-center">
+                {previewUrl ? (
+                    <img src={previewUrl} alt="thumb" className="h-28 w-28 object-cover rounded-lg" />
+                ) : (
+                    <span className="text-xs text-gray-400">点击上传 PNG/JPG</span>
+                )}
+                <input type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
+              </label>
+
+              {/* 编辑功能选择 (摳圖/擴圖/精准控圖) */}
+              <div className="space-y-3">
+                 <label className="text-xs font-bold tracking-widest text-gray-400 uppercase">选择 Agent 工具</label>
+                 <div className="grid grid-cols-1 gap-3">
+                    {([
+                        {id: 'generate_scene', name: '精准控图生图', desc: '保持产品不变，生成背景'},
+                        {id: 'rembg', name: '全自动抠图', desc: '移除背景，生成透明 PNG'},
+                        {id: 'outpaint', name: '智能扩图', desc: '向四周延申画面'},
+                    ] as const).map(mode => (
+                        <button 
+                            key={mode.id}
+                            onClick={() => setEditMode(mode.id)}
+                            className={`p-4 rounded-xl border text-left flex justify-between items-center transition ${editMode === mode.id ? 'border-blue-500 bg-blue-50 shadow-inner' : 'border-gray-100 hover:border-gray-200'}`}
+                        >
+                            <div>
+                                <div className={`font-medium text-sm ${editMode === mode.id ? 'text-blue-700' : 'text-gray-900'}`}>{mode.name}</div>
+                                <div className="text-xs text-gray-400">{mode.desc}</div>
+                            </div>
+                            {editMode === mode.id && <span className="text-blue-600">✓</span>}
+                        </button>
+                    ))}
+                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* 执行按钮 */}
+          <button
+            onClick={handleGenerate}
+            disabled={isLoading || (activeTab === 'image' && !selectedFile)}
+            className="w-full py-4 bg-black text-white rounded-full font-medium tracking-widest uppercase hover:bg-gray-800 transition disabled:bg-gray-200 disabled:cursor-not-allowed group flex items-center justify-center space-x-2"
+          >
+            {isLoading ? (
+                <span>RUNNING AGENT...</span>
+            ) : (
+                <>
+                <span>✦ START AUTOMATION</span>
+                </>
+            )}
+          </button>
+
+          {/* 详情页长图导出入口 */}
+          {resultImage && editMode === 'generate_scene' && (
+             <button
+                className="w-full mt-4 py-3 bg-white border border-gray-200 text-black rounded-full font-medium tracking-widest uppercase hover:border-black transition flex items-center justify-center space-x-2 text-xs"
+             >
+                使用此图一键生成详情页长图 (1688/淘宝标准) (->)
+             </button>
+          )}
+
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default AgentCanvas;
