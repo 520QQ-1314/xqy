@@ -1,0 +1,15 @@
+/ai-ecommerce-agent
+├── /frontend (Next.js + Tailwind)
+│   ├── /components
+│   │   ├── Hero.tsx          # 高端首屏
+│   │   ├── Gallery.tsx       # Pinterest 瀑布流
+│   │   ├── Workspace.tsx     # Agent 工作台 (生图/抠图/扩图)
+│   │   └── Layout.tsx        # 整体排版
+│   └── /pages
+│       └── index.tsx         # 落地首页
+├── /backend (Python FastAPI)
+│   ├── main.py               # 核心 API 路由
+│   ├── agent_logic.py        # 调度 Nanobanana & 开源工具
+│   ├── layout_engine.py      # 长图拼接引擎 (Pillow)
+│   └── requirements.txt      # 依赖库
+└── docker-compose.yml        # 一键部署配置
